@@ -100,12 +100,32 @@
             horizontalSpan.IsDraggable = true;
             horizontalSpan.IsResizable = true;
 
+            int count = 5000;
+
+            // add new sample data
+            Streamer1.AddRange(Walker1.Next(count));
+            Streamer2.AddRange(Walker2.Next(count));
+
+            // slide marker to the left
+            BlazorPlot.Plot.GetPlottables<Marker>()
+                .ToList()
+                .ForEach(m => m.X -= count);
+
+            // remove off-screen marks
+            BlazorPlot.Plot.GetPlottables<Marker>()
+                .Where(m => m.X < 0)
+                .ToList()
+                .ForEach(m => BlazorPlot.Plot.Remove(m));
+
+            Streamer1.ViewScrollLeft();
+            Streamer2.ViewScrollLeft();
+
             BlazorPlot.Refresh();
 
             // use events for custom mouse interactivity            
             BlazorPlot.MouseButtonPressed += (s, e) =>
             {
-                 var lineUnderMouse = GetLineUnderMouse(e.Item1.X, e.Item1.Y);
+                var lineUnderMouse = GetLineUnderMouse(e.Item1.X, e.Item1.Y);
                  if (lineUnderMouse is not null)
                  {
                      PlottableBeingDragged = lineUnderMouse;
@@ -118,9 +138,9 @@
                 PlottableBeingDragged = null;                                
                 BlazorPlot.UserInputProcessor.Enable(); // enable panning again
                 BlazorPlot.Refresh();
-            };
+            };            
 
-            BlazorPlot.MouseMoved += (s, e) =>
+            BlazorPlot.MouseMoved += (s,e) =>
             {
                 // this rectangle is the area around the mouse in coordinate units
                 CoordinateRect rect = BlazorPlot.Plot.GetCoordinateRect(e.X, e.Y, radius: 10);
