@@ -1,0 +1,58 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<div class="container">
+    <h3>ScottPlot Blazor Quickstart</h3>
+    <div><a href="https://scottplot.net/quickstart/blazor/">https://scottplot.net/quickstart/blazor/</a></div>
+    <p>Current time: @currentTime.ToLongTimeString()</p>
+    <BlazorPlot @ref="BlazorPlot" Style="width: 600px; height: 400px;" />
+</div>
+
+@code {
+    BlazorPlot BlazorPlot = new();
+
+    private System.Timers.Timer timer;
+    private DateTime currentTime;
+
+    protected override void OnInitialized()
+    {
+        // Set the initial time
+        currentTime = DateTime.Now;
+
+        // Initialize the timer with a 1-second interval (1000 milliseconds)
+        timer = new System.Timers.Timer(1000)
+            {
+                AutoReset = true, // Repeat the timer
+                Enabled = true    // Start the timer immediately
+            };
+        timer.Elapsed += OnTimerElapsed;
+    }
+
+    private void OnTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        // Since the Elapsed event is raised on a background thread,
+        // use InvokeAsync to safely update UI-bound state.
+        InvokeAsync(() =>
+        {
+            currentTime = DateTime.Now;
+            StateHasChanged(); // Refresh the UI
+        });
+    }
+
+    public void Dispose()
+    {
+        // Clean up the timer when the component is disposed
+        timer?.Dispose();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            BlazorPlot.Plot.Add.Signal(Generate.Sin());
+            BlazorPlot.Plot.Add.Signal(Generate.Cos());
+        }
+        base.OnAfterRender(firstRender);
+    }
+}

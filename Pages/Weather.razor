@@ -1,0 +1,242 @@
+﻿@page "/weather"
+@using ScottPlot.AxisPanels
+@using ScottPlot.Plottables
+@using System.Timers;
+@using ScottPlot
+@using ScottPlot.Blazor
+
+
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Counter</PageTitle>
+
+<div class="container">
+    <h3>ScottPlot Blazor Quickstart</h3>
+    <div><a href="https://scottplot.net/quickstart/blazor/">https://scottplot.net/quickstart/blazor/</a></div>
+    <button type="submit" @onclick="@OnWipe">Wipe</button>
+    <button type="submit" @onclick="@OnScroll">Scroll</button>
+    <button type="submit" @onclick="@OnMark">Mark Position</button>
+    <BlazorPlot @ref="BlazorPlot" Style="width: 600px; height: 400px;" />
+</div>
+
+@code {
+
+    //readonly System.Threading.Timer AddNewDataTimer = new() { Interval = 10, Enabled = true };
+    //readonly Timer UpdatePlotTimer = new() { Interval = 50, Enabled = true };
+
+    AxisLine? PlottableBeingDragged = null;
+    //Span code
+    AxisSpanUnderMouse? SpanBeingDragged = null;
+
+    private System.Threading.Timer AddNewDataTimer;
+    private System.Threading.Timer UpdatePlotTimer;
+
+    private ScottPlot.Plottables.DataStreamer Streamer1;
+    private ScottPlot.Plottables.DataStreamer Streamer2;
+
+    readonly ScottPlot.DataGenerators.RandomWalker Walker1 = new(2, multiplier: 1000);
+    readonly ScottPlot.DataGenerators.RandomWalker Walker2 = new(1, multiplier: 1000);
+
+    private ScottPlot.Plottables.VerticalLine VLine;
+
+    BlazorPlot BlazorPlot = new();
+
+    protected async void OnWipe(MouseEventArgs mouseEventArgs)
+    {
+        Streamer1.ViewWipeRight(0.1);
+        Streamer2.ViewWipeRight(0.1);
+        //btnMark.Visible = false;
+        BlazorPlot.Plot.Remove<Marker>();
+    }
+
+    protected async void OnMark(MouseEventArgs mouseEventArgs)
+    {
+        double x1 = Streamer1.Count;
+        double y1 = Streamer1.Data.NewestPoint;
+        var marker1 = BlazorPlot.Plot.Add.Marker(x1, y1);
+        marker1.Size = 20;
+        marker1.Shape = MarkerShape.OpenCircle;
+        marker1.Color = Streamer1.LineColor;
+        marker1.LineWidth = 2;
+
+        double x2 = Streamer2.Count;
+        double y2 = Streamer2.Data.NewestPoint;
+        var marker2 = BlazorPlot.Plot.Add.Marker(x2, y2);
+        marker2.Size = 20;
+        marker2.Shape = MarkerShape.OpenCircle;
+        marker2.Color = Streamer2.LineColor;
+        marker2.LineWidth = 2;
+
+    }
+
+    protected async void OnScroll(MouseEventArgs mouseEventArgs)
+    {
+        Streamer1.ViewScrollLeft();
+        Streamer2.ViewScrollLeft();
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Streamer1 = BlazorPlot.Plot.Add.DataStreamer(2000);
+            Streamer2 = BlazorPlot.Plot.Add.DataStreamer(2000);
+            VLine = BlazorPlot.Plot.Add.VerticalLine(0, 2, ScottPlot.Colors.Red);
+
+            var vl = BlazorPlot.Plot.Add.VerticalLine(23);
+            vl.IsDraggable = true;
+            vl.Text = "VLine";
+
+            var hl = BlazorPlot.Plot.Add.HorizontalLine(0.42);
+            hl.IsDraggable = true;
+            hl.Text = "HLine";
+
+            //Span code
+            var verticalSpan = BlazorPlot.Plot.Add.VerticalSpan(.23, .78);
+            verticalSpan.IsDraggable = true;
+            verticalSpan.IsResizable = true;
+
+            var horizontalSpan = BlazorPlot.Plot.Add.HorizontalSpan(12, 21);
+            horizontalSpan.IsDraggable = true;
+            horizontalSpan.IsResizable = true;
+
+            BlazorPlot.Refresh();
+
+            // use events for custom mouse interactivity            
+            BlazorPlot.MouseButtonPressed += (s, e) =>
+            {
+                 var lineUnderMouse = GetLineUnderMouse(e.Item1.X, e.Item1.Y);
+                 if (lineUnderMouse is not null)
+                 {
+                     PlottableBeingDragged = lineUnderMouse;
+                     BlazorPlot.UserInputProcessor.Disable(); // disable panning while dragging
+                 }
+
+            };
+            BlazorPlot.MouseButtonReleased += (s, e) =>
+            {
+                PlottableBeingDragged = null;                                
+                BlazorPlot.UserInputProcessor.Enable(); // enable panning again
+                BlazorPlot.Refresh();
+            };
+
+            BlazorPlot.MouseMoved += (s, e) =>
+            {
+                // this rectangle is the area around the mouse in coordinate units
+                CoordinateRect rect = BlazorPlot.Plot.GetCoordinateRect(e.X, e.Y, radius: 10);
+
+                if (PlottableBeingDragged is null)
+                {
+                    // set cursor based on what's beneath the plottable
+                    var lineUnderMouse = GetLineUnderMouse(e.X, e.Y);
+                    /*if (lineUnderMouse is null) //Cursor = Cursors.Default;
+                    else if (lineUnderMouse.IsDraggable && lineUnderMouse is VerticalLine) //Cursor = Cursors.SizeWE;
+                    else if (lineUnderMouse.IsDraggable && lineUnderMouse is HorizontalLine) //Cursor = Cursors.SizeNS;
+                    */
+                }
+                else
+                {
+                    // update the position of the plottable being dragged
+                    if (PlottableBeingDragged is HorizontalLine hl)
+                    {
+                        hl.Y = rect.VerticalCenter;
+                        hl.Text = $"{hl.Y:0.00}";
+                    }
+                    else if (PlottableBeingDragged is VerticalLine vl)
+                    {
+                        vl.X = rect.HorizontalCenter;
+                        vl.Text = $"{vl.X:0.00}";
+                    }
+                    BlazorPlot.Refresh();
+                }
+            };
+
+            AddNewDataTimer = new System.Threading.Timer(
+            e =>
+            {
+                InvokeAsync(() =>
+                {
+                    OnTimerCallback();
+                });
+            },
+            null,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(0.01)
+            );// In De
+
+            UpdatePlotTimer = new System.Threading.Timer(
+                e =>
+                {
+                    InvokeAsync(() =>
+                    {
+                        OnTimerCallback2();
+                    });
+                },
+                null,
+                TimeSpan.Zero,
+                TimeSpan.FromSeconds(0.05)
+                );// In De
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task OnTimerCallback()
+    {
+        int count = 5;
+
+        // add new sample data
+        Streamer1.AddRange(Walker1.Next(count));
+        Streamer2.AddRange(Walker2.Next(count));
+
+        // slide marker to the left
+        BlazorPlot.Plot.GetPlottables<Marker>()
+            .ToList()
+            .ForEach(m => m.X -= count);
+
+        // remove off-screen marks
+        BlazorPlot.Plot.GetPlottables<Marker>()
+            .Where(m => m.X < 0)
+            .ToList()
+            .ForEach(m => BlazorPlot.Plot.Remove(m));
+    }
+
+    private async Task OnTimerCallback2()
+    {
+        if (Streamer1.HasNewData)
+        {
+            BlazorPlot.Plot.Title($"Processed {Streamer1.Data.CountTotal:N0} points");
+            VLine.IsVisible = Streamer1.Renderer is ScottPlot.DataViews.Wipe;
+            VLine.Position = Streamer1.Data.NextIndex * Streamer1.Data.SamplePeriod + Streamer1.Data.OffsetX;
+            BlazorPlot.Refresh();
+        }
+    }
+
+    private AxisLine? GetLineUnderMouse(float x, float y)
+    {
+        CoordinateRect rect = BlazorPlot.Plot.GetCoordinateRect(x, y, radius: 10);
+
+        foreach (AxisLine axLine in BlazorPlot.Plot.GetPlottables<AxisLine>().Reverse())
+        {
+            if (axLine.IsUnderMouse(rect))
+                return axLine;
+        }
+
+        return null;
+    }
+
+    private AxisSpanUnderMouse? GetSpanUnderMouse(float x, float y)
+    {
+        CoordinateRect rect = BlazorPlot.Plot.GetCoordinateRect(x, y, radius: 10);
+
+        foreach (AxisSpan span in BlazorPlot.Plot.GetPlottables<AxisSpan>().Reverse())
+        {
+            AxisSpanUnderMouse? spanUnderMouse = span.UnderMouse(rect);
+            if (spanUnderMouse is not null)
+                return spanUnderMouse;
+        }
+
+        return null;
+    }
+}
+
+

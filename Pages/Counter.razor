@@ -1,0 +1,138 @@
+﻿@page "/counter"
+@using ScottPlot.AxisPanels
+@using System.Timers;
+
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Counter</PageTitle>
+
+<div class="container">
+    <h3>ScottPlot Blazor Quickstart</h3>
+    <div><a href="https://scottplot.net/quickstart/blazor/">https://scottplot.net/quickstart/blazor/</a></div>
+    <button type="submit" @onclick="@OnJump">Jump</button>
+    <button type="submit" @onclick="@OnFull">Full</button>
+    <button type="submit" @onclick="@OnSlide">Slide</button>
+    <BlazorPlot @ref="BlazorPlot" Style="width: 600px; height: 400px;" />
+</div>
+
+@code {
+
+    //readonly System.Threading.Timer AddNewDataTimer = new() { Interval = 10, Enabled = true };
+    //readonly Timer UpdatePlotTimer = new() { Interval = 50, Enabled = true };
+
+    private System.Threading.Timer AddNewDataTimer;
+    private System.Threading.Timer UpdatePlotTimer;
+
+    private DateTime currentTime;
+    ScottPlot.Plottables.DataLogger Logger1;
+    ScottPlot.Plottables.DataLogger Logger2;
+
+    readonly ScottPlot.DataGenerators.RandomWalker Walker1 = new(2, multiplier: 1000);
+    readonly ScottPlot.DataGenerators.RandomWalker Walker2 = new(1, multiplier: 1000);
+
+    BlazorPlot BlazorPlot = new();
+
+    protected async void OnJump(MouseEventArgs mouseEventArgs)
+    {
+        Logger1.ViewJump(); Logger2.ViewJump();
+        await JSRuntime.InvokeVoidAsync("alert", "Jump View Activated");
+    }
+
+    protected async void OnFull(MouseEventArgs mouseEventArgs)
+    {
+        Logger1.ViewFull(); Logger2.ViewFull();
+        await JSRuntime.InvokeVoidAsync("alert", "Full View Activatedy!");
+        
+    }
+
+    protected async void OnSlide(MouseEventArgs mouseEventArgs)
+    {
+        Logger1.ViewSlide(); Logger2.ViewSlide();
+        await JSRuntime.InvokeVoidAsync("alert", "Slide View Activated!");
+    }
+
+    protected  async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // disable interactivity by default
+            //BlazorPlot.UserInputProcessor.Disable();
+
+            // create two loggers and add them to the plot
+            Logger1 = BlazorPlot.Plot.Add.DataLogger();
+            Logger2 = BlazorPlot.Plot.Add.DataLogger();
+
+            // use the right axis (already there by default) for the first logger
+            RightAxis axis1 = (RightAxis)BlazorPlot.Plot.Axes.Right;
+            Logger1.Axes.YAxis = axis1;
+            axis1.Color(Logger1.Color);
+
+            // create and add a secondary right axis to use for the other logger
+            RightAxis axis2 = BlazorPlot.Plot.Axes.AddRightAxis();
+            Logger2.Axes.YAxis = axis2;
+            axis2.Color(Logger2.Color);
+
+            int count = 3000;
+            Logger1.Add(Walker1.Next(count));
+            Logger2.Add(Walker2.Next(count));
+            BlazorPlot.Refresh();
+           
+            AddNewDataTimer = new System.Threading.Timer(
+            e =>
+            {
+                InvokeAsync(() =>
+                {
+                    OnTimerCallback();
+                });
+            },
+            null,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(1)
+            );// In De
+
+            UpdatePlotTimer = new System.Threading.Timer(
+                e =>
+                {
+                    InvokeAsync(() =>
+                    {
+                        OnTimerCallback2();
+                    });
+                },
+                null,
+                TimeSpan.Zero,
+                TimeSpan.FromSeconds(1)
+                );// In De
+
+
+            /*for (int i = 0; i < 1000; i++)
+            {
+                
+                await Task.Delay(1000); // 1-second delay on each iteration
+                const int count = 5;
+                Logger1.Add(Walker1.Next(count));
+                Logger2.Add(Walker2.Next(count));
+
+                BlazorPlot.Refresh();
+                //await InvokeAsync(StateHasChanged);
+                
+            }*/
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+   private async Task OnTimerCallback()
+   {
+         const int count = 5;
+         Logger1.Add(Walker1.Next(count));
+         Logger2.Add(Walker2.Next(count));
+    }
+
+     private async Task OnTimerCallback2()
+     {
+         BlazorPlot.Refresh();
+         
+    }
+}
+
+
+    
