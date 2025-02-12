@@ -1,0 +1,119 @@
+﻿@page "/selection"
+
+<PageTitle>Zoom por Selección con BlazorPlot</PageTitle>
+
+<div class="container">
+    <h3>Zoom por Selección (BlazorPlot)</h3>
+    <div
+    style="position: relative; display: inline-block;">
+        <BlazorPlot @ref="blazorPlot" Style="width: 600px; height: 400px;" />
+    </div>
+</div>
+
+@code {
+    // Referencia al componente BlazorPlot
+    private BlazorPlot blazorPlot = new BlazorPlot();
+    
+    // Instancia del Plot (se asigna en OnAfterRender)
+    private Plot plt;
+
+    // Variables para almacenar las coordenadas de inicio y fin (en datos)
+    private Coordinates coordInicio;
+    private Coordinates coordActual;
+    private bool isDragging = false;
+
+    // Plottable para mostrar el rectángulo de selección
+    private ScottPlot.Plottables.Rectangle selectionRect;
+
+    /// <summary>
+    /// En el primer render se inicializa el Plot, se agregan las señales y se crea el plottable para el rectángulo de selección.
+    /// </summary>
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Obtener la instancia del Plot desde BlazorPlot
+            plt = blazorPlot.Plot;
+
+            // Agregar datos de ejemplo: señales de seno y coseno
+            plt.Add.Signal(Generate.Sin());
+            plt.Add.Signal(Generate.Cos());
+
+            selectionRect = blazorPlot.Plot.Add.Rectangle(0, 0, 0, 0);
+            selectionRect.FillStyle.Color = Colors.Red.WithAlpha(0.2f);
+            selectionRect.LineStyle.Color = Colors.Red;
+            selectionRect.LineWidth = 2;
+            selectionRect.IsVisible = false;
+            
+
+            //This draws a green rectangle correctly
+            //var rect = blazorPlot.Plot.Add.Rectangle(0, 1, 0, 1);
+            //rect.FillStyle.Color = Colors.Transparent;
+            //rect.LineStyle.Color = Colors.Green;
+            //rect.LineStyle.Width = 3;
+            //rect.LineStyle.IsVisible = true;
+
+            blazorPlot.MouseMoved += (object? sender, Pixel px) =>
+            {
+                if (!isDragging)
+                    return;
+
+                coordActual = plt.GetCoordinates(px.X, px.Y);
+                selectionRect.CoordinateRect = new CoordinateRect(coordInicio, coordActual);
+                //this code is changed here because if you put it in MouseButtonPressed event 
+                //it draws a big red rectangle when you click the mouse button
+                selectionRect.IsVisible = true;
+                blazorPlot.Refresh();
+            };
+
+            blazorPlot.MouseButtonPressed += (object? sender, (Pixel px, ScottPlot.Interactivity.MouseButton button) args) =>
+            {
+               /*isDragging = true;
+                coordInicio = plt.GetCoordinates(args.px.X, args.px.Y);
+                selectionRect.IsVisible = true;  
+                blazorPlot.UserInputProcessor.Disable(); */ 
+                isDragging = true;
+                coordInicio = blazorPlot.Plot.GetCoordinates(args.px.X, args.px.Y); 
+                blazorPlot.UserInputProcessor.Disable();
+            };
+            
+            blazorPlot.MouseButtonReleased += (object? sender, (Pixel px, ScottPlot.Interactivity.MouseButton button) args) =>
+            {
+                if (!isDragging)
+                    return;
+
+                isDragging = false;
+                coordActual = plt.GetCoordinates(args.px.X, args.px.Y);
+                selectionRect.CoordinateRect = new CoordinateRect(coordInicio, coordActual);
+
+                // Calcular los límites en datos usando las coordenadas de inicio y fin
+                double xMin = Math.Min(coordInicio.X, coordActual.X);
+                double xMax = Math.Max(coordInicio.X, coordActual.X);
+                double yMin = Math.Min(coordInicio.Y, coordActual.Y);
+                double yMax = Math.Max(coordInicio.Y, coordActual.Y);
+
+                // Aplicar el zoom en la zona seleccionada
+                plt.Axes.SetLimits(xMin, xMax, yMin, yMax);
+
+                // Ocultar el rectángulo de selección
+                selectionRect.IsVisible = false;
+                blazorPlot.UserInputProcessor.Enable();
+                blazorPlot.Refresh();
+            };
+
+            blazorPlot.Refresh();
+        }
+    }
+
+   
+    /// <summary>
+    /// Método para restablecer el zoom a los límites automáticos.
+    /// </summary>
+    private void ResetZoom()
+    {
+         /*blazorPlot.Plot.Axes.SetLimits(
+             double.NaN, double.NaN,
+            double.NaN,  double.NaN);
+            blazorPlot.Refresh();*/
+    }
+}
